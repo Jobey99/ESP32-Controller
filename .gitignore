@@ -1,0 +1,29 @@
+# PlatformIO build directory
+.pio/
+
+# PlatformIO build artifacts and logs
+build.log
+build_utf8.log
+.pio/build/
+.pio/libdeps/
+
+# Build outputs
+*.elf
+*.bin
+*.map
+*.hex
+*.pio
+
+# VS Code workspace & settings
+.vscode/
+*.code-workspace
+
+# Editor backups / OS files
+.DS_Store
+Thumbs.db
+
+# Node / npm
+node_modules/
+
+# Environment files (may contain secrets)
+.env

@@ -1,0 +1,750 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0" />
+  <title>ESP32 AV Tool</title>
+  <link rel="stylesheet" href="style.css" />
+  <style>
+    canvas {
+      width: 100%;
+      height: 200px;
+      background: #111;
+      border-radius: 8px;
+    }
+
+    .tabs {
+      display: flex;
+      border-bottom: 1px solid var(--c-border);
+      margin-bottom: 15px;
+    }
+
+    .tab {
+      padding: 10px 15px;
+      cursor: pointer;
+      opacity: 0.6;
+      border-bottom: 2px solid transparent;
+    }
+
+    .tab:hover {
+      opacity: 0.8;
+    }
+
+    .tab.active {
+      opacity: 1;
+      border-color: var(--c-accent);
+      font-weight: bold;
+    }
+
+    .subpanel {
+      display: none;
+    }
+
+    .subpanel.show {
+      display: block;
+      animation: fadein 0.2s;
+    }
+  </style>
+</head>
+
+<body>
+
+  <div class="app-shell">
+
+    <!-- Sidebar Navigation -->
+    <nav class="sidebar" id="sidebar">
+      <div class="brand">
+        <span>ESP32 AV Tool</span>
+      </div>
+
+      <div class="nav-section">
+        <div class="nav-label">Control</div>
+        <a class="nav-item active" data-target="tab-devices">Saved Devices</a>
+        <a class="nav-item" data-target="tab-rs232">RS232 Serial</a>
+        <a class="nav-item" data-target="tab-terminal">TCP Client</a>
+        <a class="nav-item" data-target="tab-tcpserver">TCP Server</a>
+        <a class="nav-item" data-target="tab-udp">UDP Tool</a>
+        <a class="nav-item" data-target="tab-pjlink">PJLink</a>
+        <a class="nav-item" data-target="tab-learn">Learner</a>
+      </div>
+
+      <div class="nav-section">
+        <div class="nav-label">Network Tools</div>
+        <a class="nav-item" data-target="tab-conn">Connectivity</a>
+        <a class="nav-item" data-target="tab-discovery">Discovery</a>
+        <a class="nav-item" data-target="tab-mdns">mDNS Browser</a>
+        <a class="nav-item" data-target="tab-ssdp">SSDP Browser</a>
+        <a class="nav-item" data-target="tab-proxy">TCP Proxy</a>
+      </div>
+
+      <div class="nav-section">
+        <div class="nav-label">Settings</div>
+        <a class="nav-item" data-target="tab-wifi">Wi-Fi / Network</a>
+        <a class="nav-item" data-target="tab-backup">Backup</a>
+        <a class="nav-item" data-target="tab-log">Live Log</a>
+        <a class="nav-item" data-target="tab-system">System & FW</a>
+      </div>
+    </nav>
+
+    <!-- Main Content Area -->
+    <div class="main-content">
+      <button class="menu-toggle" id="menuToggle">☰</button>
+
+      <!-- Top Status Banner (Visible on all pages) -->
+      <div class="page-header">
+        <div>
+          <h1 id="pageTitle">Saved Devices</h1>
+          <div id="healthLine" class="sub">Loading status...</div>
+        </div>
+        <button id="btnHelp" class="btn">Help ?</button>
+      </div>
+
+      <!-- ================= CONTROL SECTION ================= -->
+
+      <!-- Devices Tab -->
+      <section id="tab-devices" class="panel show">
+        <div class="card">
+          <div class="row between">
+            <h2>My Devices</h2>
+            <button id="btnDevicesLoad" class="btn">Reload</button>
+          </div>
+          <div class="sub" style="margin-bottom:15px">Devices saved in NVS config. Use "Terminal" to connect instantly.
+          </div>
+
+          <!-- Quick Links -->
+          <div class="row" style="margin-bottom:15px; flex-wrap:wrap">
+            <button class="btn grow" onclick="document.querySelector('[data-target=\'tab-wifi\']').click()">WiFi
+              Settings</button>
+            <button class="btn grow"
+              onclick="document.querySelector('[data-target=\'tab-conn\']').click()">Ping/DNS</button>
+            <button class="btn grow"
+              onclick="document.querySelector('[data-target=\'tab-discovery\']').click()">Scanner</button>
+            <button class="btn grow"
+              onclick="document.querySelector('[data-target=\'tab-rs232\']').click()">RS232</button>
+          </div>
+
+          <div id="devicesList" class="list"></div>
+        </div>
+      </section>
+
+      <!-- RS232 Pro Tab (Integrated) -->
+      <section id="tab-rs232" class="panel">
+        <div class="grid2">
+          <div class="card">
+            <h2>RS232 Live Terminal</h2>
+            <div id="rs232Out" class="terminal"></div>
+            <div class="row">
+              <textarea id="rs232Send" class="grow" placeholder="Send command..."></textarea>
+              <button id="btnRs232Send" class="btn primary">Send</button>
+            </div>
+            <div class="row">
+              <select id="rs232Mode" style="width:80px">
+                <option value="ascii">ASCII</option>
+                <option value="hex">HEX</option>
+              </select>
+              <select id="rs232Suffix" style="width:100px">
+                <option value="">(none)</option>
+                <option value="\r">\r (CR)</option>
+                <option value="\n">\n (LF)</option>
+                <option value="\r\n">\r\n (CRLF)</option>
+              </select>
+            </div>
+            <div class="row">
+              <div class="note">Quick Presets:</div>
+              <button class="btn tiny" onclick="sendPreset(1)">1</button>
+              <button class="btn tiny" onclick="sendPreset(2)">2</button>
+              <button class="btn tiny" onclick="sendPreset(3)">3</button>
+            </div>
+          </div>
+
+          <div class="flex-col gap-4">
+            <div class="card">
+              <h2>Port Configuration</h2>
+              <div class="row">
+                <label>Baud: </label>
+                <select id="rs232Baud" class="grow">
+                  <option value="1200">1200</option>
+                  <option value="2400">2400</option>
+                  <option value="4800">4800</option>
+                  <option value="9600">9600</option>
+                  <option value="19200">19200</option>
+                  <option value="38400">38400</option>
+                  <option value="57600">57600</option>
+                  <option value="115200">115200</option>
+                </select>
+              </div>
+              <div class="row">
+                <label class="chk"><input type="checkbox" id="rs232Invert"> Invert Polarity (SW)</label>
+              </div>
+              <div id="telnetStatus" class="mono small"
+                style="margin-top:10px; padding:8px; background:rgba(0,0,0,0.2); border-radius:4px;">Telnet: -</div>
+            </div>
+
+            <div class="card" style="margin-top:15px">
+              <h2>Tools & Profiles</h2>
+              <div class="sub">Load standard settings</div>
+              <div class="row">
+                <select id="rs232Profile" class="grow">
+                  <option value="0">Generic</option>
+                  <option value="1">Extron</option>
+                  <option value="2">Blustream</option>
+                  <option value="3">Kramer</option>
+                </select>
+                <button id="btnLoadProfile" class="btn">Load</button>
+              </div>
+              <hr style="border-color:var(--c-border); opacity:0.3; margin:15px 0">
+              <div class="row">
+                <button id="btnAutoScan" class="btn caution grow">Auto-Baud Scan</button>
+                <button id="btnLoopback" class="btn grow">Loopback Test</button>
+              </div>
+              <div id="rs232SysOut" class="mono box small"
+                style="height:80px; margin-top:10px; color:var(--c-text-muted)">(events)</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- TCP Terminal Tab -->
+      <section id="tab-terminal" class="panel">
+        <div class="card">
+          <h2>TCP Client Terminal</h2>
+          <div class="sub">Connect to any raw TCP server (e.g. port 23, 8080).</div>
+
+          <div class="row">
+            <input id="termHost" class="grow" placeholder="Host/IP" />
+            <input id="termPort" type="number" placeholder="Port" style="max-width:80px" />
+            <button id="btnTermConnect" class="btn primary">Connect</button>
+            <button id="btnTermDisconnect" class="btn danger">Disconnect</button>
+          </div>
+
+          <div id="termOut" class="terminal"></div>
+
+          <div class="row">
+            <textarea id="termSend" class="grow" placeholder="Command..."></textarea>
+            <button id="btnTermSend" class="btn primary">Send</button>
+          </div>
+
+          <div class="row">
+            <select id="termMode">
+              <option value="ascii">ASCII</option>
+              <option value="hex">HEX</option>
+            </select>
+            <select id="termSuffix">
+              <option value="">(none)</option>
+              <option value="\r">\r</option>
+              <option value="\n">\n</option>
+              <option value="\r\n">\r\n</option>
+            </select>
+          </div>
+        </div>
+      </section>
+
+      <!-- UDP Tab -->
+      <section id="tab-udp" class="panel">
+        <div class="card">
+          <h2>UDP Sender & Listener</h2>
+          <div class="sub">Send "Fire & Forget" packets and listen for incoming data.</div>
+
+          <div class="grid2">
+            <div class="card" style="border:1px solid var(--c-accent)">
+              <h3>Sender</h3>
+              <div class="row">
+                <input id="udpTarget" class="grow" placeholder="Target IP" />
+                <input id="udpPort" type="number" placeholder="Port" style="width:80px" value="5000" />
+              </div>
+              <div class="row">
+                <textarea id="udpSendMsg" class="grow" placeholder="Message..."></textarea>
+                <button id="btnUdpSend" class="btn primary">Send</button>
+              </div>
+            </div>
+
+            <div class="card">
+              <h3>Listener</h3>
+              <div class="row">
+                <label>Local Port</label>
+                <input id="udpListenPort" type="number" value="5000" style="width:80px" />
+                <button id="btnUdpSetPort" class="btn">Set & Restart</button>
+              </div>
+              <div id="udpStatus" class="mono small muted">Listening on 5000</div>
+            </div>
+          </div>
+
+          <div style="margin-top:10px">
+            <div class="row between">
+              <h3>Console</h3>
+              <button class="btn tiny" onclick="$('udpOut').innerHTML=''">Clear</button>
+            </div>
+            <div id="udpOut" class="terminal" style="height:250px"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- TCP SERVER TAB -->
+      <section id="tab-tcpserver" class="panel">
+        <div class="card">
+          <div class="row between">
+            <h2>TCP Server</h2>
+            <div id="tcpServerStatus" class="mono">STOPPED</div>
+          </div>
+          <div class="sub">Listen for incoming TCP connections.</div>
+
+          <div class="row">
+            <input id="tcpServerPort" type="number" value="23" style="width:80px" placeholder="Port" />
+            <button id="btnTcpServerToggle" class="btn primary">Start</button>
+          </div>
+
+          <div class="grid2" style="margin-top:10px">
+            <div class="card">
+              <h3>Clients & Broadcast</h3>
+              <div class="row">
+                <textarea id="tcpServerMsg" class="grow" placeholder="Message to clients..."></textarea>
+                <button id="btnTcpServerSend" class="btn">Broadcast</button>
+              </div>
+              <div id="tcpServerClients" class="box" style="height:100px; color:#aaa"></div>
+            </div>
+            <div>
+              <div class="row between">
+                <h3>Console</h3>
+                <button class="btn tiny" onclick="$('tcpServerOut').innerHTML=''">Clear</button>
+              </div>
+              <div id="tcpServerOut" class="terminal" style="height:250px"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- PJLink Tab -->
+      <section id="tab-pjlink" class="panel">
+        <div class="card">
+          <h2>PJLink Control</h2>
+          <div class="row">
+            <input id="pjlIp" class="grow" placeholder="Projector IP" />
+            <input id="pjlPass" type="password" placeholder="Password (opt)" />
+          </div>
+
+          <div class="grid2" style="margin-top:15px">
+            <div>
+              <div class="nav-label">Power</div>
+              <div class="row">
+                <button class="btn grow" onclick="sendPjl('%1POWR 1')">ON</button>
+                <button class="btn grow" onclick="sendPjl('%1POWR 0')">OFF</button>
+                <button class="btn" onclick="sendPjl('%1POWR ?')">?</button>
+              </div>
+            </div>
+            <div>
+              <div class="nav-label">Mute</div>
+              <div class="row">
+                <button class="btn grow" onclick="sendPjl('%1AVMT 31')">Mute ON</button>
+                <button class="btn grow" onclick="sendPjl('%1AVMT 30')">Mute OFF</button>
+              </div>
+            </div>
+          </div>
+          <div class="row">
+            <select id="pjlInput" class="grow">
+              <option value="31">HDMI 1</option>
+              <option value="32">HDMI 2</option>
+              <option value="33">HDMI 3</option>
+              <option value="11">RGB 1</option>
+            </select>
+            <button class="btn" onclick="sendPjlInput()">Set Input</button>
+            <button class="btn" onclick="sendPjl('%1INPT ?')">Get</button>
+          </div>
+          <div class="row" style="margin-top:20px">
+            <input id="pjlCustom" class="grow" placeholder="Custom Command (e.g. %1NAME ?)" />
+            <button class="btn" onclick="sendPjlCustom()">Send</button>
+          </div>
+          <div id="pjlOut" class="mono box" style="height:60px; margin-top:10px">(response)</div>
+        </div>
+      </section>
+
+      <!-- Learner Tab -->
+      <section id="tab-learn" class="panel">
+        <div class="grid2">
+          <div class="card">
+            <h2>Learner</h2>
+            <div class="row">
+              <label class="chk"><input type="checkbox" id="learnEnabled"> Enable Learner Port</label>
+              <input id="learnPort" type="number" style="width:80px" />
+              <button id="btnSaveLearner" class="btn">Set</button>
+            </div>
+            <div class="row">
+              <input id="capFilter" class="grow" placeholder="Filter..." />
+              <button id="btnRefreshCaps" class="btn">Refresh</button>
+            </div>
+            <div id="caps" class="list" style="max-height:400px; overflow:auto"></div>
+          </div>
+
+          <div class="card">
+            <h2>Save Capture to Device</h2>
+            <div class="row">
+              <input id="saveCapId" class="grow" placeholder="ID (click Use on capture)" readonly />
+              <button id="btnLoadCap" class="btn">Load Data</button>
+            </div>
+            <div class="row">
+              <input id="devName" class="grow" placeholder="Name" />
+              <input id="devIp" class="grow" placeholder="IP" />
+            </div>
+            <div class="row">
+              <input id="devPortHint" type="number" placeholder="Port" style="width:80px" />
+              <select id="devSuffix" class="grow">
+                <option value="">(no suffix)</option>
+                <option value="\r">\r</option>
+                <option value="\n">\n</option>
+                <option value="\r\n">\r\n</option>
+              </select>
+            </div>
+            <textarea id="devNotes" placeholder="Notes..."></textarea>
+            <div class="row">
+              <button id="btnSaveDevice" class="btn primary grow">Save Device</button>
+            </div>
+            <div id="learnSaveOut" class="mono small"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= NETWORK TOOLS SECTION ================= -->
+
+      <!-- Connectivity Tab (New Page) -->
+      <section id="tab-conn" class="panel">
+        <div class="tabs">
+          <div class="tab active" onclick="switchConn(this, 'c-ping')">Ping / WoL</div>
+          <div class="tab" onclick="switchConn(this, 'c-dns')">DNS & WAN</div>
+          <div class="tab" onclick="switchConn(this, 'c-calc')">Subnet Calc</div>
+        </div>
+
+        <!-- Ping Subpanel -->
+        <div id="c-ping" class="subpanel show">
+          <div class="grid2">
+            <div class="card">
+              <h2>ICMP Ping & Traceroute</h2>
+              <div class="row">
+                <input id="pingHost" class="grow" placeholder="Host/IP" value="8.8.8.8" />
+                <button id="btnPing" class="btn primary">Ping</button>
+              </div>
+              <div id="pingOut" class="mono box" style="height:200px"></div>
+            </div>
+            <div class="card">
+              <h2>Wake-on-LAN</h2>
+              <div class="row">
+                <input id="wolMac" class="grow" placeholder="AA:BB:CC:DD:EE:FF" />
+                <button id="btnWolSend" class="btn">Send Magic Packet</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- DNS/WAN Subpanel -->
+        <div id="c-dns" class="subpanel">
+          <div class="card">
+            <h2>Internet Check</h2>
+            <div class="row">
+              <button id="btnCheckWan" class="btn primary">Check Connectivity</button>
+            </div>
+            <div id="wanOut" class="mono box" style="height:60px"></div>
+          </div>
+          <div class="card" style="margin-top:15px">
+            <h2>DNS Lookup</h2>
+            <div class="row">
+              <input id="dnsHost" class="grow" placeholder="Hostname (e.g. google.com)" />
+              <button id="btnDnsLookup" class="btn">Resolve</button>
+            </div>
+            <div id="dnsOut" class="mono box" style="height:60px"></div>
+          </div>
+        </div>
+
+        <!-- Calc Subpanel -->
+        <div id="c-calc" class="subpanel">
+          <div class="card">
+            <h2>Subnet Calculator</h2>
+            <div class="row">
+              <input id="calcIp" class="grow" placeholder="IP Address" value="192.168.1.10" />
+              <span style="font-size:20px">/</span>
+              <input id="calcCidr" type="number" value="24" style="width:60px" />
+            </div>
+            <button onclick="doSubnetCalc()" class="btn">Calculate</button>
+            <div id="calcOut" class="mono box" style="height:150px; margin-top:10px"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Discovery Tab -->
+      <section id="tab-discovery" class="panel">
+        <div class="card">
+          <h2>Network Discovery</h2>
+          <div class="sub">Scanning based on your IP subnet.</div>
+          <div class="row">
+            <input id="discSubnet" class="grow" placeholder="Subnet (auto)" />
+            <input id="discFrom" value="1" style="width:50px" type="number" />
+            <span class="small">-</span>
+            <input id="discTo" value="254" style="width:60px" type="number" />
+          </div>
+          <div class="row">
+            <button id="btnDiscStart" class="btn primary">Start Scan</button>
+            <button id="btnDiscStop" class="btn danger">Stop</button>
+          </div>
+          <div id="discOut" class="mono list"></div>
+        </div>
+
+        <div class="grid2" style="margin-top:15px">
+          <div class="card" style="border-color:var(--c-accent)">
+            <h3>Targeted Port Scanner</h3>
+            <div class="sub">Deep scan specific ports on a single device.</div>
+            <input id="psIp" class="grow" placeholder="Target IP" style="margin-bottom:5px; width:100%" />
+            <input id="psPorts" class="grow" placeholder="Ports (22,80,443...)" value="21,22,23,80,443,8080,554"
+              style="width:100%" />
+            <div class="row">
+              <button id="btnPortScan" class="btn caution">Scan Ports</button>
+            </div>
+            <div id="psOut" class="mono box" style="height:100px"></div>
+          </div>
+
+          <div class="card">
+            <h3>Deep Subnet Scan</h3>
+            <div class="sub">Scans common AV ports (23,80,443,6100,etc) across entire subnet. Slow.</div>
+            <button id="btnSubnetScan" class="btn caution">Launch Deep Subnet Scan</button>
+            <div id="discOut2" class="mono box" style="height:100px; margin-top:10px"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- mDNS Tab -->
+      <section id="tab-mdns" class="panel">
+        <div class="card">
+          <h2>mDNS Browser</h2>
+          <div class="sub">ZeroConf / Bonjour devices</div>
+          <div class="row">
+            <select id="mdnsService" class="grow">
+              <option value="_http">Web Server (_http)</option>
+              <option value="_nvx">Crestron NVX (_nvx)</option>
+              <option value="_airplay">AirPlay (_airplay)</option>
+              <option value="_googlecast">Google Cast</option>
+              <option value="_dante-device">Dante</option>
+              <option value="_qsc">Q-Sys</option>
+              <option value="custom">(Custom)</option>
+            </select>
+            <input id="mdnsCustom" class="grow" style="display:none" placeholder="_ssh" />
+            <select id="mdnsProto" style="width:80px">
+              <option value="tcp">TCP</option>
+              <option value="udp">UDP</option>
+            </select>
+            <button id="btnMdnsScan" class="btn">Scan</button>
+          </div>
+          <div id="mdnsOut" class="list"></div>
+        </div>
+      </section>
+
+      <!-- SSDP Tab -->
+      <section id="tab-ssdp" class="panel">
+        <div class="card">
+          <h2>SSDP Browser</h2>
+          <div class="sub">UPnP / DLNA Discovery</div>
+          <button id="btnSsdp" class="btn">Send M-SEARCH</button>
+          <div id="ssdpOut" class="list" style="margin-top:10px"></div>
+        </div>
+      </section>
+
+      <!-- Proxy Tab -->
+      <section id="tab-proxy" class="panel">
+        <div class="card">
+          <h2>TCP Proxy / Sniffer</h2>
+          <div class="sub">Forward traffic from ESP port to target, logging data.</div>
+          <div class="row">
+            <label>Listen Port</label>
+            <input id="proxyListen" type="number" value="23001" style="width:100px" />
+          </div>
+          <div class="row">
+            <label>Target</label>
+            <input id="proxyTargetHost" class="grow" placeholder="Target IP" />
+            <input id="proxyTargetPort" type="number" placeholder="Port" style="width:80px" />
+          </div>
+          <div class="row">
+            <label class="chk"><input type="checkbox" id="proxyCapToLearn"> Capture to Learner</label>
+          </div>
+          <div class="row">
+            <button id="btnProxyStart" class="btn primary">Start Proxy</button>
+            <button id="btnProxyStop" class="btn danger">Stop</button>
+          </div>
+          <div id="proxyOut" class="terminal"></div>
+        </div>
+      </section>
+
+
+      <!-- ================= SETTINGS SECTION ================= -->
+
+      <!-- Wi-Fi Tab -->
+      <section id="tab-wifi" class="panel">
+        <div class="card">
+          <h2>Wi-Fi Analyzer</h2>
+          <canvas id="wifiChart"></canvas>
+          <div class="row">
+            <button id="btnWifiScan" class="btn">Scan Networks</button>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top:20px">
+          <h2>Configuration</h2>
+          <div class="row">
+            <div id="wifiConnLine" class="mono">Loading...</div>
+          </div>
+          <div class="row">
+            <select id="wifiScanList" class="grow">
+              <option>(scan first)</option>
+            </select>
+          </div>
+          <div class="row">
+            <button id="btnUseSsid" class="btn">Use Selected</button>
+          </div>
+          <hr>
+          <div class="row">
+            <label>Mode</label>
+            <select id="wMode">
+              <option value="apsta">AP + STA (Recommended)</option>
+              <option value="sta">STA Only</option>
+              <option value="ap">AP Only</option>
+            </select>
+          </div>
+          <div class="grid2">
+            <div>
+              <div class="nav-label">Station (Client)</div>
+              <input id="wStaSsid" class="grow" placeholder="SSID" style="margin-bottom:5px; width:100%" />
+              <input id="wStaPass" class="grow" placeholder="Password" type="password" style="width:100%" />
+            </div>
+            <div>
+              <div class="nav-label">Access Point</div>
+              <input id="wApSsid" class="grow" placeholder="AP SSID" style="margin-bottom:5px; width:100%" />
+              <input id="wApPass" class="grow" placeholder="AP Password (min 8 chars)" type="password"
+                style="width:100%" />
+              <input id="wApCh" type="number" placeholder="Chan" value="6" style="margin-top:5px; width:60px" />
+            </div>
+          </div>
+          <div class="row" style="margin-top:20px">
+            <button id="btnSaveWifi" class="btn primary">Save & Reboot</button>
+            <button id="btnForgetWifi" class="btn danger">Reset to AP Default</button>
+          </div>
+          <div id="wifiStatusOut" class="mono small"></div>
+        </div>
+      </section>
+
+      <!-- Backup Tab -->
+      <section id="tab-backup" class="panel">
+        <div class="card">
+          <h2>NVS Config Backup</h2>
+          <textarea id="cfgText" placeholder="JSON Config..."></textarea>
+          <div class="row">
+            <button id="btnLoadCfg" class="btn">View Current</button>
+            <button id="btnDownloadCfg" class="btn">Download File</button>
+            <button id="btnUploadCfg" class="btn caution">Upload & Apply</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Log Tab -->
+      <section id="tab-log" class="panel">
+        <div class="card">
+          <h2>System Live Log</h2>
+          <div id="log" class="log"></div>
+        </div>
+      </section>
+
+      <!-- System Tab -->
+      <section id="tab-system" class="panel">
+        <div class="grid2">
+          <div class="card">
+            <h2>Remote OTA</h2>
+            <div class="sub">Check VPS for updates</div>
+            <div class="row">
+              <button id="btnCheckOta" class="btn primary">Check for Update</button>
+            </div>
+            <div id="otaOnlineStatus" class="mono small" style="margin-top:5px"></div>
+          </div>
+          <div class="card">
+            <h2>Update Firmware</h2>
+            <div class="sub">Upload compiled .bin</div>
+            <input type="file" id="fileFw" accept=".bin" style="margin:10px 0" />
+            <button id="btnUpdateFw" class="btn primary">Flash Firmware</button>
+            <div id="progFw" class="progress-wrap">
+              <div class="bar"></div>
+            </div>
+          </div>
+          <div class="card">
+            <h2>Update Filesystem</h2>
+            <div class="sub">Upload littlefs.bin (HTML/JS)</div>
+            <input type="file" id="fileFs" accept=".bin" style="margin:10px 0" />
+            <button id="btnUpdateFs" class="btn">Flash Filesystem</button>
+            <div id="progFs" class="progress-wrap">
+              <div class="bar"></div>
+            </div>
+          </div>
+          <div class="card">
+            <h2>Power</h2>
+            <button id="btnReboot" class="btn danger">Reboot Device</button>
+          </div>
+        </div>
+        <div id="otaOut" class="mono box" style="margin-top:10px">(OTA Status)</div>
+      </section>
+
+    </div> <!-- end main-content -->
+  </div> <!-- end app-shell -->
+
+  <!-- Help Modal -->
+  <div id="helpModal" class="modal">
+    <div class="modal-content">
+      <div class="row between">
+        <h2>ESP32 AV Tool Help</h2>
+        <span class="close" id="btnCloseHelp">&times;</span>
+      </div>
+      <div class="help-body">
+        <h3>Control</h3>
+        <p><b>Saved Devices:</b> Store IP/Port of frequent devices. Click "Term" to connect instantly via TCP.</p>
+        <p><b>RS232 Serial:</b> Connect your RS232 device to GPIO 16 (RX) / GPIO 17 (TX) via a MAX3232 module.
+          <br>&bull; Change baud rate, invert polarity, send ASCII or HEX commands.
+          <br>&bull; <b>Profiles:</b> Pre-built command sets for common AV devices (Extron, Crestron, etc).
+          <br>&bull; <b>Auto-Baud:</b> Automatically detects the correct baud rate.
+          <br>&bull; <b>Loopback:</b> Connects TX&rarr;RX to verify wiring.
+          <br>&bull; <b>Telnet Bridge:</b> Access RS232 remotely via Telnet on port 2323.
+        </p>
+        <p><b>TCP Client:</b> Raw TCP socket. Connect to any IP:Port (e.g. Telnet on 23) and send/receive data.</p>
+        <p><b>TCP Server:</b> Listen on a configurable port. Incoming connections appear in the UI for interactive
+          send/receive.</p>
+        <p><b>UDP Tool:</b> Send UDP packets to any IP:Port. Set a listen port to capture incoming UDP data.</p>
+        <p><b>PJLink:</b> Controls projectors using the PJLink protocol (port 4352). Power on/off, input select, and
+          status queries.</p>
+        <p><b>Learner:</b> Listens on TCP port 5000 and captures all incoming data. Shows hex, ASCII, suffix detection,
+          and payload type. Useful for reverse-engineering AV protocols.</p>
+
+        <h3>Network Tools</h3>
+        <p><b>Connectivity:</b>
+          <br>&bull; <b>Ping:</b> Check if a device is online.
+          <br>&bull; <b>Wake-on-LAN:</b> Send a Magic Packet to wake a PC by MAC.
+          <br>&bull; <b>DNS Lookup:</b> Resolve hostname to IP.
+          <br>&bull; <b>Internet Check:</b> Verify ESP32 has internet (DNS + Ping test).
+          <br>&bull; <b>Subnet Calc:</b> Calculate network/broadcast/range from IP and mask.
+        </p>
+        <p><b>Discovery:</b>
+          <br>&bull; <b>Subnet Scan:</b> Pings every IP in your subnet (x.x.x.1&ndash;254).
+          <br>&bull; <b>Port Scan:</b> Checks specific ports on a single device.
+        </p>
+        <p><b>mDNS Browser:</b> Discovers ZeroConf/Bonjour services (Google Cast, AirPlay, HTTP, printers). ESP32 must
+          be on the same Wi-Fi as target devices.</p>
+        <p><b>SSDP Browser:</b> Sends M-SEARCH multicast to discover UPnP/DLNA devices (smart TVs, media servers,
+          routers).</p>
+        <p><b>TCP Proxy:</b> Man-in-the-Middle tool. ESP32 listens on a port and forwards traffic to a target. Great for
+          sniffing AV control protocols. Optionally logs to the Learner.</p>
+
+        <h3>Settings</h3>
+        <p><b>Wi-Fi / Network:</b> STA (client), AP (access point), or AP+STA mode. Scan for networks and save
+          credentials. Reboot after changing settings.</p>
+        <p><b>Backup:</b> Export/import device configuration as JSON. Clone settings between ESP32 units.</p>
+        <p><b>Live Log:</b> Real-time log output from the ESP32 via WebSocket.</p>
+        <p><b>System & FW:</b>
+          <br>&bull; <b>Remote OTA:</b> Check for firmware updates from a remote server.
+          <br>&bull; <b>Manual Flash:</b> Upload .bin to update firmware or filesystem.
+          <br>&bull; <b>Reboot:</b> Restart the ESP32.
+        </p>
+      </div>
+    </div>
+    <script src="app.js?v=2"></script>
+</body>
+
+</html>
