@@ -183,46 +183,70 @@ bool MacroHandler::execute(const String &id) {
   return true;
 }
 
-void MacroHandler::doExecute(const String &id) {
-  _running = true;
-  const Macro *macro = nullptr;
-  for (const auto &m : _macros) {
-    if (m.id == id) {
-      macro = &m;
-      break;
-    }
-  }
-  if (!macro) {
-    logAll("Macro not found: " + id);
-    _running = false;
-    return;
-  }
+// Static FreeRTOS task function
+static void macroTaskCode(void *parameter) {
+  Macro *macroCopy = static_cast<Macro *>(parameter);
 
-  logAll("▶ Macro: " + macro->name + " (" + String(macro->steps.size()) +
-         " steps)");
+  logAll("▶ Macro Task: " + macroCopy->name + " (" +
+         String(macroCopy->steps.size()) + " steps)");
 
-  for (size_t i = 0; i < macro->steps.size(); i++) {
-    const auto &step = macro->steps[i];
+  for (size_t i = 0; i < macroCopy->steps.size(); i++) {
+    const auto &step = macroCopy->steps[i];
     logAll("  Step " + String(i + 1) + ": " + step.type + " → " + step.target);
 
     if (step.type == "tcp") {
-      executeTcpStep(step);
+      macroHandler.executeTcpStep(step);
     } else if (step.type == "rs232") {
-      executeRS232Step(step);
+      macroHandler.executeRS232Step(step);
     } else if (step.type == "udp") {
-      executeUdpStep(step);
+      macroHandler.executeUdpStep(step);
     } else if (step.type == "delay") {
-      delay(step.delayMs);
+      vTaskDelay(pdMS_TO_TICKS(step.delayMs));
     }
 
     // Inter-step delay
     if (step.type != "delay" && step.delayMs > 0) {
-      delay(step.delayMs);
+      vTaskDelay(pdMS_TO_TICKS(step.delayMs));
     }
   }
 
-  logAll("✓ Macro complete: " + macro->name);
-  _running = false;
+  logAll("✓ Macro Task complete: " + macroCopy->name);
+
+  // Cleanup
+  delete macroCopy;
+  macroHandler.setRunning(false);
+  vTaskDelete(NULL);
+}
+
+void MacroHandler::doExecute(const String &id) {
+  const Macro *sourceMacro = nullptr;
+  for (const auto &m : _macros) {
+    if (m.id == id) {
+      sourceMacro = &m;
+      break;
+    }
+  }
+
+  if (!sourceMacro) {
+    logAll("Macro not found: " + id);
+    return;
+  }
+
+  _running = true;
+
+  // Make a copy of the macro to pass to the task (in case _macros is modified
+  // while running)
+  Macro *macroCopy = new Macro(*sourceMacro);
+
+  // Spawn FreeRTOS task on Core 1 (App Core) to avoid blocking the
+  // webserver/main loop
+  xTaskCreatePinnedToCore(macroTaskCode, // Task function
+                          "MacroTask",   // Name of task
+                          4096,          // Stack size
+                          macroCopy,     // Parameter
+                          1, // Priority (1 is standard Arduino loop priority)
+                          NULL, // Task handle
+                          1);   // Core to run on (1 = App core)
 }
 
 void MacroHandler::executeTcpStep(const MacroStep &step) {

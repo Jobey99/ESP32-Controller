@@ -34,6 +34,12 @@ public:
   // Execution
   bool execute(const String &id);
   bool isRunning() { return _running; }
+  void setRunning(bool r) { _running = r; }
+
+  // Expose step executors for the background task
+  void executeTcpStep(const MacroStep &step);
+  void executeRS232Step(const MacroStep &step);
+  void executeUdpStep(const MacroStep &step);
 
 private:
   std::vector<Macro> _macros;
@@ -44,9 +50,6 @@ private:
   void load();
   void persist();
   void doExecute(const String &id);
-  void executeTcpStep(const MacroStep &step);
-  void executeRS232Step(const MacroStep &step);
-  void executeUdpStep(const MacroStep &step);
 };
 
 extern MacroHandler macroHandler;
