@@ -10,7 +10,7 @@
 
 ---
 
-## ⚡ Quick Flash (No Code Required)
+## Quick Flash (No Code Required)
 
 **Don't want to set up a developer environment?** Flash directly from your browser:
 
@@ -27,11 +27,11 @@
 
 | Component | Required | Approx. Cost | Notes |
 |-----------|----------|-------------|-------|
-| ESP32 DevKit v1 | ✅ Yes | ~£5 | Any ESP32-WROOM-32 board works |
-| Micro-USB / USB-C cable | ✅ Yes | ~£3 | For initial flashing + power |
-| MAX3232 RS232-to-TTL module | ❌ Optional | ~£3 | Only needed for RS232 serial devices |
-| DB9 cable | ❌ Optional | ~£3 | For connecting to RS232 gear |
-| 5V USB power supply | ❌ Optional | ~£5 | For permanent installation |
+| ESP32 DevKit v1 |  Yes | ~£5 | Any ESP32-WROOM-32 board works |
+| Micro-USB / USB-C cable |  Yes | ~£3 | For initial flashing + power |
+| MAX3232 RS232-to-TTL module |  Optional | ~£3 | Only needed for RS232 serial devices |
+| DB9 cable |  Optional | ~£3 | For connecting to RS232 gear |
+| 5V USB power supply |  Optional | ~£5 | For permanent installation |
 
 ### Wiring (RS232 Module)
 
@@ -49,9 +49,9 @@ No RS232 module? No problem — all network features (TCP, UDP, PJLink, Discover
 
 ---
 
-## ✨ Features
+## Features
 
-### 🎛 Control
+### Control
 - **Dashboard** — Live system status, device overview, quick-launch macros
 - **Macros** — Save multi-step command sequences (TCP + RS232 + UDP) and replay with one click
 - **RS232 Terminal** — Full serial terminal with baud rate, polarity inversion, auto-detect, loopback test
@@ -64,7 +64,7 @@ No RS232 module? No problem — all network features (TCP, UDP, PJLink, Discover
 - **Command Templates** — Pre-built command libraries for Extron, Kramer, Lightware, Samsung
 - **Learner** — Capture and decode incoming TCP traffic for reverse engineering
 
-### 🔍 Network Tools
+### Network Tools
 - **Subnet Scanner** — Ping-sweep your entire network
 - **Port Scanner** — Probe specific ports on any device
 - **SSDP Browser** — Discover UPnP/DLNA devices (TVs, media servers)
@@ -74,7 +74,7 @@ No RS232 module? No problem — all network features (TCP, UDP, PJLink, Discover
 - **Subnet Calculator** — IP/CIDR math in the browser
 - **TCP Proxy** — Man-in-the-middle AV protocols for debugging
 
-### ⚙️ Settings
+### Settings
 - **Wi-Fi** — AP, STA, or AP+STA mode with visual signal analyzer
 - **Config Backup** — Export/import all settings as JSON
 - **OTA Updates** — Remote firmware updates from GitHub + manual .bin upload
@@ -82,7 +82,7 @@ No RS232 module? No problem — all network features (TCP, UDP, PJLink, Discover
 
 ---
 
-## 🛠 Developer Setup (PlatformIO)
+## Developer Setup (PlatformIO)
 
 If you want to modify the code and build from source:
 
@@ -121,7 +121,7 @@ pio device monitor -b 115200
 
 ---
 
-## 📂 Project Layout
+## Project Layout
 
 ```
 src/              C++ firmware source
@@ -149,7 +149,7 @@ tests/            Verification scripts
 
 ---
 
-## 🧪 Development & Testing
+## Development & Testing
 
 ### Mock Server (No Hardware)
 
@@ -174,7 +174,7 @@ This creates fake SSDP and mDNS devices on your network that the ESP32 will disc
 
 ---
 
-## 🔧 Troubleshooting
+## Troubleshooting
 
 | Problem | Solution |
 |---------|----------|
@@ -187,7 +187,7 @@ This creates fake SSDP and mDNS devices on your network that the ESP32 will disc
 
 ---
 
-## 📜 API Reference
+## API Reference
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
@@ -208,14 +208,13 @@ WebSocket endpoints: `/ws` (logs), `/term` (terminal), `/wsrs232`, `/wsudp`, `/w
 
 ---
 
-## 🤝 Contributing
+## Contributing
 
 Contributions welcome! Open an issue or PR. For feature requests, please describe your use case.
 
-## 📄 License
+## License
 
 MIT License — see [LICENSE](LICENSE) file.
 
 ---
 
-Built with ❤️ for the AV community. Enjoy exploring gear with an ESP32! 🎉
