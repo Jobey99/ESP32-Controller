@@ -543,9 +543,119 @@ window.onload = async () => {
   window.sendPjl = async (cmd) => {
     const ip = $("pjlIp").value;
     if (!ip) return alert("IP required");
-    $("pjlOut").textContent = "Sending...";
-    const res = await apiPost("/api/pjlink", { ip, pass: $("pjlPass").value, cmd });
-    $("pjlOut").textContent = res.response;
+    $("pjlOut").textContent = `> ${cmd}\nSending...`;
+    try {
+      const res = await apiPost("/api/pjlink", { ip, pass: $("pjlPass").value, cmd });
+      $("pjlOut").textContent = `> ${cmd}\n< ${res.response}`;
+      return res.response;
+    } catch (e) {
+      $("pjlOut").textContent = `> ${cmd}\n< Error: ` + e.message;
+      return "ERROR";
+    }
+  };
+
+  window.sendPjlCustom = () => {
+    if ($("pjlCustom").value) sendPjl($("pjlCustom").value);
+  };
+
+  window.pollPjlinkStatus = async () => {
+    const ip = $("pjlIp").value;
+    if (!ip) return;
+
+    // Power
+    let pwr = await sendPjl("%1POWR ?");
+    if (pwr.includes("=0")) $("pjlStatusPwr").textContent = "OFF";
+    else if (pwr.includes("=1")) $("pjlStatusPwr").textContent = "ON";
+    else if (pwr.includes("=2")) $("pjlStatusPwr").textContent = "COOLING";
+    else if (pwr.includes("=3")) $("pjlStatusPwr").textContent = "WARM-UP";
+    else $("pjlStatusPwr").textContent = pwr.replace('%1POWR=', '') || "ERR";
+
+    // Errors (Fan, Lamp, Temp, Cover, Filter, Other)
+    let err = await sendPjl("%1ERST ?");
+    if (err.includes("=")) {
+      let code = err.split("=")[1].trim();
+      let hasErr = false;
+      for (let i = 0; i < code.length; i++) {
+        if (code[i] === '2') { hasErr = true; break; } // '2' means Error in PJLink ERST
+      }
+      $("pjlStatusErr").textContent = hasErr ? "ERROR " + code : "OK";
+      $("pjlStatusErr").style.color = hasErr ? "var(--c-danger)" : "var(--c-accent)";
+    }
+
+    // Input
+    let inpt = await sendPjl("%1INPT ?");
+    if (inpt.includes("=")) $("pjlStatusInpt").textContent = inpt.split("=")[1].trim();
+
+    // Lamp
+    let lamp = await sendPjl("%1LAMP ?");
+    if (lamp.includes("=")) $("pjlStatusLamp").textContent = lamp.split("=")[1].split(" ")[0] + " hrs";
+  };
+
+  // AV Translator
+  const hexBytesToArray = (hexStr) => {
+    return (hexStr.replace(/[^0-9a-fA-F]/g, "").match(/.{1,2}/g) || []).map(h => parseInt(h, 16));
+  };
+
+  window.translateAsciiToHex = () => {
+    let ascii = $("transAscii").value;
+    let hexArr = [];
+    for (let i = 0; i < ascii.length; i++) {
+      let code = ascii.charCodeAt(i);
+      // Map common literal escapes
+      if (ascii[i] === '\\' && i + 1 < ascii.length) {
+        let next = ascii[i + 1];
+        if (next === 'r') { code = 0x0D; i++; }
+        else if (next === 'n') { code = 0x0A; i++; }
+        else if (next === 't') { code = 0x09; i++; }
+        else if (next === 'x' && i + 3 < ascii.length) {
+          code = parseInt(ascii.substring(i + 2, i + 4), 16);
+          i += 3;
+        }
+      }
+      hexArr.push(code.toString(16).padStart(2, '0').toUpperCase());
+    }
+    $("transHex").value = hexArr.join(" ");
+    $("transAsciiLen").textContent = ascii.length + " chars";
+    $("transHexLen").textContent = hexArr.length + " bytes";
+  };
+
+  window.translateHexToAscii = () => {
+    let hexArr = hexBytesToArray($("transHex").value);
+    let ascii = "";
+    for (let b of hexArr) {
+      if (b === 0x0D) ascii += "\\r";
+      else if (b === 0x0A) ascii += "\\n";
+      else if (b >= 0x20 && b <= 0x7E) ascii += String.fromCharCode(b);
+      else ascii += "\\x" + b.toString(16).padStart(2, '0').toUpperCase();
+    }
+    $("transAscii").value = ascii;
+    $("transAsciiLen").textContent = ascii.replace(/\\x[0-9A-F]{2}/gi, '_').replace(/\\[rn]/g, '_').length + " chars";
+    $("transHexLen").textContent = hexArr.length + " bytes";
+  };
+
+  window.formatHexSpaced = () => {
+    let arr = hexBytesToArray($("transHex").value);
+    $("transHex").value = arr.map(h => h.toString(16).padStart(2, '0').toUpperCase()).join(" ");
+  };
+
+  window.formatHexSlashX = () => {
+    let arr = hexBytesToArray($("transHex").value);
+    $("transHex").value = arr.map(h => "\\x" + h.toString(16).padStart(2, '0').toUpperCase()).join("");
+  };
+
+  window.calcChecksum = (type) => {
+    let arr = hexBytesToArray($("transHex").value);
+    if (arr.length === 0) return $("transChecksumResult").textContent = "--";
+    let res = 0;
+    if (type === 'sum') {
+      res = arr.reduce((a, b) => a + b, 0) % 256;
+    } else if (type === 'xor') {
+      res = arr.reduce((a, b) => a ^ b, 0);
+    } else if (type === '2s') {
+      let sum = arr.reduce((a, b) => a + b, 0) % 256;
+      res = (256 - sum) % 256;
+    }
+    $("transChecksumResult").textContent = res.toString(16).padStart(2, '0').toUpperCase();
   };
 
 

@@ -67,7 +67,8 @@
         <a class="nav-item" data-target="tab-terminal">TCP Client</a>
         <a class="nav-item" data-target="tab-tcpserver">TCP Server</a>
         <a class="nav-item" data-target="tab-udp">UDP Tool</a>
-        <a class="nav-item" data-target="tab-pjlink">PJLink</a>
+        <a class="nav-item" data-target="tab-pjlink">PJLink Remote</a>
+        <a class="nav-item" data-target="tab-translator">AV Translator</a>
         <a class="nav-item" data-target="tab-learn">Learner</a>
         <a class="nav-item" data-target="tab-templates">Templates</a>
       </div>
@@ -360,45 +361,130 @@
 
       <!-- PJLink Tab -->
       <section id="tab-pjlink" class="panel">
-        <div class="card">
-          <h2>PJLink Control</h2>
-          <div class="row">
-            <input id="pjlIp" class="grow" placeholder="Projector IP" />
-            <input id="pjlPass" type="password" placeholder="Password (opt)" />
+        <div class="card"
+          style="max-width: 500px; margin: 0 auto; background: #1a1a1a; border: 1px solid var(--c-border); box-shadow: 0 4px 15px rgba(0,0,0,0.5);">
+          <h2 style="text-align:center; padding-bottom:10px; border-bottom:1px solid #333;">PJLink Remote</h2>
+          <div class="row" style="margin-bottom:15px; margin-top:10px;">
+            <input id="pjlIp" class="grow mono" placeholder="Projector IP" style="background:#0a0a0a;" />
+            <input id="pjlPass" type="password" placeholder="Pass (opt)"
+              style="max-width: 100px; background:#0a0a0a;" />
           </div>
 
-          <div class="grid2" style="margin-top:15px">
-            <div>
-              <div class="nav-label">Power</div>
-              <div class="row">
-                <button class="btn grow" onclick="sendPjl('%1POWR 1')">ON</button>
-                <button class="btn grow" onclick="sendPjl('%1POWR 0')">OFF</button>
-                <button class="btn" onclick="sendPjl('%1POWR ?')">?</button>
-              </div>
+          <!-- Status Display -->
+          <div
+            style="background: #050505; padding: 15px; border-radius: 8px; margin-bottom: 20px; text-align: center; border: 1px solid #222; box-shadow: inset 0 0 10px rgba(0,0,0,0.8);">
+            <div class="row between" style="margin-bottom: 10px;">
+              <div><span class="sub">PWR: </span><b id="pjlStatusPwr" style="color:var(--c-accent)">UNKNOWN</b></div>
+              <div><span class="sub">ERR: </span><b id="pjlStatusErr" style="color:var(--c-danger)">----</b></div>
             </div>
-            <div>
-              <div class="nav-label">Mute</div>
-              <div class="row">
-                <button class="btn grow" onclick="sendPjl('%1AVMT 31')">Mute ON</button>
-                <button class="btn grow" onclick="sendPjl('%1AVMT 30')">Mute OFF</button>
-              </div>
+            <div class="row between">
+              <div><span class="sub">INPT: </span><b id="pjlStatusInpt">--</b></div>
+              <div><span class="sub">LAMP: </span><b id="pjlStatusLamp">-- hrs</b></div>
             </div>
+            <button class="btn tiny" style="width:100%; margin-top:15px;" onclick="pollPjlinkStatus()">Poll
+              Status</button>
           </div>
-          <div class="row">
-            <select id="pjlInput" class="grow">
-              <option value="31">HDMI 1</option>
-              <option value="32">HDMI 2</option>
-              <option value="33">HDMI 3</option>
-              <option value="11">RGB 1</option>
-            </select>
-            <button class="btn" onclick="sendPjlInput()">Set Input</button>
-            <button class="btn" onclick="sendPjl('%1INPT ?')">Get</button>
+
+          <!-- Power Row -->
+          <div class="row" style="gap:15px; margin-bottom: 20px;">
+            <button class="btn grow"
+              style="height: 60px; font-size: 1.2rem; background: #2a5a2a; color: #fff; border: 1px solid #4a7a4a; box-shadow: 0 4px 6px rgba(0,0,0,0.3);"
+              onclick="sendPjl('%1POWR 1'); setTimeout(pollPjlinkStatus, 2000);">⏻ ON</button>
+            <button class="btn grow"
+              style="height: 60px; font-size: 1.2rem; background: #5a2a2a; color: #fff; border: 1px solid #7a4a4a; box-shadow: 0 4px 6px rgba(0,0,0,0.3);"
+              onclick="sendPjl('%1POWR 0'); setTimeout(pollPjlinkStatus, 2000);">⏻ OFF</button>
           </div>
-          <div class="row" style="margin-top:20px">
-            <input id="pjlCustom" class="grow" placeholder="Custom Command (e.g. %1NAME ?)" />
+
+          <!-- Mute Row -->
+          <div class="row" style="gap:15px; margin-bottom: 20px;">
+            <button class="btn grow" style="height: 50px; background: #222; border: 1px solid #444;"
+              onclick="sendPjl('%1AVMT 11'); setTimeout(pollPjlinkStatus, 1500);">PIC MUTE</button>
+            <button class="btn grow" style="height: 50px; background: #222; border: 1px solid #444;"
+              onclick="sendPjl('%1AVMT 21'); setTimeout(pollPjlinkStatus, 1500);">SND MUTE</button>
+            <button class="btn grow" style="height: 50px; border-color: var(--c-danger);"
+              onclick="sendPjl('%1AVMT 30'); setTimeout(pollPjlinkStatus, 1500);">UNMUTE</button>
+          </div>
+
+          <!-- Input Grid -->
+          <div class="nav-label" style="text-align:center; margin-bottom:10px;">Inputs</div>
+          <div class="row" style="flex-wrap: wrap; gap:10px; margin-bottom: 20px; justify-content: space-between;">
+            <button class="btn" style="flex-basis: 31%; height: 50px; background: #222;"
+              onclick="sendPjl('%1INPT 31'); setTimeout(pollPjlinkStatus, 1500);">HDMI 1</button>
+            <button class="btn" style="flex-basis: 31%; height: 50px; background: #222;"
+              onclick="sendPjl('%1INPT 32'); setTimeout(pollPjlinkStatus, 1500);">HDMI 2</button>
+            <button class="btn" style="flex-basis: 31%; height: 50px; background: #222;"
+              onclick="sendPjl('%1INPT 33'); setTimeout(pollPjlinkStatus, 1500);">HDMI 3</button>
+
+            <button class="btn" style="flex-basis: 31%; height: 50px; background: #222;"
+              onclick="sendPjl('%1INPT 11'); setTimeout(pollPjlinkStatus, 1500);">PC / VGA</button>
+            <button class="btn" style="flex-basis: 31%; height: 50px; background: #222;"
+              onclick="sendPjl('%1INPT 51'); setTimeout(pollPjlinkStatus, 1500);">HDBaseT</button>
+            <button class="btn" style="flex-basis: 31%; height: 50px; background: #222;"
+              onclick="sendPjl('%1INPT 41'); setTimeout(pollPjlinkStatus, 1500);">USB / NET</button>
+          </div>
+
+          <div class="row" style="margin-top:20px; padding-top:15px; border-top: 1px solid #333;">
+            <input id="pjlCustom" class="grow mono" placeholder="Custom Cmd (e.g. %1NAME ?)"
+              style="background:#0a0a0a;" />
             <button class="btn" onclick="sendPjlCustom()">Send</button>
           </div>
-          <div id="pjlOut" class="mono box" style="height:60px; margin-top:10px">(response)</div>
+          <div id="pjlOut" class="mono box small"
+            style="height:40px; margin-top:10px; background:#000; overflow-y:auto; border: 1px dashed #444;"></div>
+        </div>
+      </section>
+
+      <!-- AV Translator Tab -->
+      <section id="tab-translator" class="panel">
+        <div class="card">
+          <h2>HEX ↔ ASCII AV Translator</h2>
+          <p class="sub" style="margin-bottom:15px;">Convert between raw Hexadecimal bytes and ASCII strings instantly.
+            Useful for calculating checksums and formatting RS232 commands.</p>
+
+          <div class="grid2" style="margin-bottom:20px;">
+            <!-- ASCII Side -->
+            <div style="display:flex; flex-direction:column;">
+              <label class="nav-label">ASCII String</label>
+              <textarea id="transAscii" class="mono"
+                style="height: 150px; background: #000; color: var(--c-accent); padding: 10px; border: 1px solid var(--c-border); resize: none;"
+                placeholder="e.g. POWER ON\r" oninput="translateAsciiToHex()"></textarea>
+              <div class="row between" style="margin-top:5px;">
+                <span class="sub" id="transAsciiLen">0 chars</span>
+                <button class="btn tiny"
+                  onclick="document.getElementById('transAscii').value=''; translateAsciiToHex();">Clear</button>
+              </div>
+            </div>
+
+            <!-- HEX Side -->
+            <div style="display:flex; flex-direction:column;">
+              <label class="nav-label">HEX Bytes</label>
+              <textarea id="transHex" class="mono"
+                style="height: 150px; background: #000; color: #ffcc00; padding: 10px; border: 1px solid var(--c-border); resize: none;"
+                placeholder="e.g. 50 4F 57 45 52 20 4F 4E 0D" oninput="translateHexToAscii()"></textarea>
+              <div class="row between" style="margin-top:5px;">
+                <span class="sub" id="transHexLen">0 bytes</span>
+                <div class="row" style="gap:5px;">
+                  <button class="btn tiny" onclick="formatHexSpaced()">Space</button>
+                  <button class="btn tiny" onclick="formatHexSlashX()">\x</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card" style="margin-top: 20px; padding: 15px; background: #111; border: 1px solid #333;">
+            <h3 style="margin-top:0;">Checksum Calculator</h3>
+            <p class="sub small">Calculates checksum on the Hex bytes above. Often required at the end of AV serial
+              formats.</p>
+            <div class="row" style="align-items:center; gap:15px; margin-top:15px;">
+              <button class="btn" onclick="calcChecksum('sum')">Sum (MOD 256)</button>
+              <button class="btn" onclick="calcChecksum('xor')">XOR (BCC)</button>
+              <button class="btn" onclick="calcChecksum('2s')">2's Complement</button>
+              <div style="flex-grow:1; text-align:right;">
+                <span class="sub" style="margin-right:10px;">Result:</span>
+                <b id="transChecksumResult" class="mono"
+                  style="font-size: 1.5rem; color: #fff; background: #000; padding: 5px 15px; border-radius:4px; border:1px solid #555;">--</b>
+              </div>
+            </div>
+          </div>
         </div>
       </section>
 
