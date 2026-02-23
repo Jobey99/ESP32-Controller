@@ -1,10 +1,10 @@
 {
     "firmware": {
-        "version": "0.8.7",
-        "url": "https://github.com/Jobey99/ESP32-Controller/releases/download/v0.8.7/firmware.bin"
+        "version": "0.9.0",
+        "url": "https://github.com/Jobey99/ESP32-Controller/releases/download/v0.9.0/firmware.bin"
     },
     "filesystem": {
-        "version": "0.1.0",
-        "url": "https://github.com/Jobey99/ESP32-Controller/releases/download/v0.8.7/littlefs.bin"
+        "version": "0.9.0",
+        "url": "https://github.com/Jobey99/ESP32-Controller/releases/download/v0.9.0/littlefs.bin"
     }
 }
