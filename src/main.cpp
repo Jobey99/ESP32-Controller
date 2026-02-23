@@ -15,9 +15,9 @@
 #include <ESPmDNS.h>
 #include <LittleFS.h>
 
-
 // Defined in WebAPI.cpp
 extern void mdnsScanLoop();
+extern void pjlinkLoop();
 
 Preferences prefs;
 uint32_t bootMs;
@@ -83,6 +83,7 @@ void loop() {
   portScanner.loop();
   ssdpScanner.loop();
   mdnsScanLoop();
+  pjlinkLoop();
   macroHandler.loop();
   otaHandler.loop();
 

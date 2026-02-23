@@ -106,6 +106,25 @@ void mdnsScanLoop() {
     }
   }
 }
+
+// PJLink non-blocking execution state
+volatile bool pjlPending = false;
+volatile bool pjlFinished = false;
+String pjlPendingIp = "";
+String pjlPendingPass = "";
+String pjlPendingCmd = "";
+volatile char pjlResultBuf[256] = {0};
+
+void pjlinkLoop() {
+  if (pjlPending) {
+    String res = pjlinkCmd(pjlPendingIp, pjlPendingPass, pjlPendingCmd);
+    strncpy((char *)pjlResultBuf, res.c_str(), sizeof(pjlResultBuf) - 1);
+    pjlResultBuf[sizeof(pjlResultBuf) - 1] = '\0';
+    pjlFinished = true;
+    pjlPending = false;
+  }
+}
+
 #include "TcpServerHandler.h" // Added
 #include "TerminalHandler.h"
 #include "UdpHandler.h" // Added
@@ -786,20 +805,35 @@ void setupRoutes() {
           return;
         }
         String ip = doc["ip"] | "";
-        String pass = doc["pass"] | "";
-        String cmd = doc["cmd"] | "";
-        if (!ip.length() || !cmd.length()) {
-          req->send(400, "application/json",
-                    "{\"error\":\"missing ip or cmd\"}");
+
+        if (!ip.length()) {
+          req->send(400, "application/json", "{\"error\":\"missing ip\"}");
           return;
         }
-        String resp = pjlinkCmd(ip, pass, cmd);
-        JsonDocument res;
-        res["response"] = resp;
-        String out;
-        serializeJson(res, out);
-        req->send(200, "application/json", out);
+
+        pjlPendingIp = ip;
+        pjlPendingPass = doc["pass"] | "";
+        pjlPendingCmd = doc["cmd"] | "";
+        pjlPending = true;
+        pjlFinished = false;
+
+        req->send(200, "application/json", "{\"status\":\"started\"}");
       });
+
+  server.on("/api/pjlink/status", HTTP_GET, [](AsyncWebServerRequest *req) {
+    JsonDocument doc;
+    if (pjlPending) {
+      doc["status"] = "running";
+    } else if (pjlFinished) {
+      doc["status"] = "done";
+      doc["response"] = (const char *)pjlResultBuf;
+    } else {
+      doc["status"] = "idle";
+    }
+    String out;
+    serializeJson(doc, out);
+    req->send(200, "application/json", out);
+  });
 
   // Removed: duplicate /api/mdns/scan POST handler
   // The correct async version is registered above and defers to mdnsScanLoop()

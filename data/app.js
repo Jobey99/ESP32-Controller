@@ -545,9 +545,20 @@ window.onload = async () => {
     if (!ip) return alert("IP required");
     $("pjlOut").textContent = `> ${cmd}\nSending...`;
     try {
-      const res = await apiPost("/api/pjlink", { ip, pass: $("pjlPass").value, cmd });
-      $("pjlOut").textContent = `> ${cmd}\n< ${res.response}`;
-      return res.response;
+      await apiPost("/api/pjlink", { ip, pass: $("pjlPass").value, cmd });
+
+      for (let i = 0; i < 30; i++) {
+        await new Promise(r => setTimeout(r, 200));
+        let res = await apiGet("/api/pjlink/status");
+        if (res.status === "done") {
+          $("pjlOut").textContent = `> ${cmd}\n< ${res.response}`;
+          return res.response;
+        } else if (res.status === "idle") {
+          return "ERROR";
+        }
+      }
+      $("pjlOut").textContent = `> ${cmd}\n< Timeout waiting for ESP32`;
+      return "ERROR";
     } catch (e) {
       $("pjlOut").textContent = `> ${cmd}\n< Error: ` + e.message;
       return "ERROR";
