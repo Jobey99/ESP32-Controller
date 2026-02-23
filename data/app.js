@@ -710,5 +710,256 @@ window.onload = async () => {
     const sel = $("wifiScanList");
     if (sel.value) $("wStaSsid").value = sel.value;
   };
+
+  // ── Dashboard ──
+  loadDashboard();
+  setInterval(loadDashboard, 5000);
+
+  // ── Macros ──
+  loadMacros();
+  if ($("btnNewMacro")) $("btnNewMacro").onclick = () => openMacroEditor();
+  if ($("btnSaveMacro")) $("btnSaveMacro").onclick = saveMacro;
+
+  // ── Templates ──
+  loadTemplates();
 };
 
+// ── Dashboard Functions ──
+async function loadDashboard() {
+  try {
+    const d = await apiGet("/api/dashboard");
+    const sys = $("dashSystem");
+    if (sys) {
+      const upH = Math.floor(d.uptime_s / 3600);
+      const upM = Math.floor((d.uptime_s % 3600) / 60);
+      sys.innerHTML = `
+        <div>FW: <b>${d.fw}</b> | Heap: ${(d.heap_free / 1024).toFixed(0)}KB</div>
+        <div>WiFi: ${d.wifi_connected ? '🟢 Connected' : '🔴 Disconnected'} ${d.wifi_connected ? `(${d.wifi_ip}) RSSI ${d.wifi_rssi}` : `AP: ${d.ap_ip}`}</div>
+        <div>Uptime: ${upH}h ${upM}m</div>
+        <div>Terminal: ${d.term_connected ? '🟢' : '⚪'} | RS232 Telnet: ${d.rs232_telnet ? '🟢' : '⚪'} | Proxy: ${d.proxy_running ? '🟢' : '⚪'}</div>
+      `;
+    }
+
+    // Device cards
+    const devEl = $("dashDevices");
+    if (devEl && d.devices) {
+      if (d.devices.length === 0) {
+        devEl.innerHTML = '<span class="sub">No saved devices. Add devices via the Learner or Discovery pages.</span>';
+      } else {
+        devEl.innerHTML = d.devices.map(dev => `
+          <div class="item" style="display:flex; align-items:center; gap:10px">
+            <span style="font-size:20px">${dev.online ? '🟢' : '🔴'}</span>
+            <div style="flex:1">
+              <b>${esc(dev.ip)}</b>:${dev.port || '?'}
+              <div class="small muted">${dev.online ? 'Online' : 'Offline'}</div>
+            </div>
+            <button class="btn tiny" onclick="openTerminal('${dev.ip}', ${dev.port || 23})">Connect</button>
+          </div>
+        `).join('');
+      }
+    }
+
+    // Quick macros on dashboard
+    try {
+      const macros = await apiGet("/api/macros");
+      const dm = $("dashMacros");
+      if (dm) {
+        if (macros.length === 0) {
+          dm.innerHTML = '<span class="sub">No macros yet. Create one from the Macros page.</span>';
+        } else {
+          dm.innerHTML = macros.map(m => `
+            <button class="btn" onclick="runMacro('${m.id}')" title="${esc(m.name)}">${m.icon || '▶'} ${esc(m.name)}</button>
+          `).join('');
+        }
+      }
+    } catch (e) { }
+  } catch (e) { }
+}
+
+// ── Macro Functions ──
+let macroStepCount = 0;
+
+async function loadMacros() {
+  try {
+    const macros = await apiGet("/api/macros");
+    const el = $("macroList");
+    if (!el) return;
+    if (macros.length === 0) {
+      el.innerHTML = '<div class="sub">No macros saved. Click "+ New Macro" to create one.</div>';
+      return;
+    }
+    el.innerHTML = macros.map(m => `
+      <div class="item" style="display:flex; align-items:center; gap:10px">
+        <span style="font-size:24px">${m.icon || '▶'}</span>
+        <div style="flex:1">
+          <b>${esc(m.name)}</b>
+          <div class="small muted">${m.stepCount} step${m.stepCount !== 1 ? 's' : ''}</div>
+        </div>
+        <button class="btn primary" onclick="runMacro('${m.id}')">Run</button>
+        <button class="btn" onclick="editMacro('${m.id}')">Edit</button>
+        <button class="btn danger" onclick="deleteMacro('${m.id}')">✕</button>
+      </div>
+    `).join('');
+  } catch (e) { console.error("loadMacros", e); }
+}
+
+function openMacroEditor(macro) {
+  $("macroEditor").style.display = "block";
+  $("macroEditorTitle").textContent = macro ? "Edit Macro" : "New Macro";
+  $("macroName").value = macro ? macro.name : "";
+  $("macroIcon").value = macro ? (macro.icon || "▶") : "▶";
+  $("macroEditId").value = macro ? macro.id : "";
+  $("macroSteps").innerHTML = "";
+  macroStepCount = 0;
+  if (macro && macro.steps) {
+    macro.steps.forEach(s => addMacroStep(s));
+  }
+}
+
+window.addMacroStep = (step) => {
+  macroStepCount++;
+  const i = macroStepCount;
+  const div = document.createElement("div");
+  div.className = "card";
+  div.style.cssText = "margin:8px 0; padding:10px; border:1px solid var(--c-border)";
+  div.id = `step-${i}`;
+  div.innerHTML = `
+    <div class="row between">
+      <b>Step ${i}</b>
+      <button class="btn tiny danger" onclick="this.closest('.card').remove()">✕</button>
+    </div>
+    <div class="row" style="margin-top:5px">
+      <select class="ms-type" style="width:100px">
+        <option value="tcp" ${step?.type === 'tcp' ? 'selected' : ''}>TCP</option>
+        <option value="rs232" ${step?.type === 'rs232' ? 'selected' : ''}>RS232</option>
+        <option value="udp" ${step?.type === 'udp' ? 'selected' : ''}>UDP</option>
+        <option value="delay" ${step?.type === 'delay' ? 'selected' : ''}>Delay</option>
+      </select>
+      <input class="ms-target grow" placeholder="Target IP" value="${step?.target || ''}" />
+      <input class="ms-port" type="number" placeholder="Port" style="width:70px" value="${step?.port || ''}" />
+    </div>
+    <div class="row" style="margin-top:5px">
+      <input class="ms-payload grow" placeholder="Payload / Command" value="${esc(step?.payload || '')}" />
+      <select class="ms-suffix" style="width:80px">
+        <option value="" ${!step?.suffix ? 'selected' : ''}>(none)</option>
+        <option value="\\r" ${step?.suffix === '\\r' ? 'selected' : ''}>\\r</option>
+        <option value="\\n" ${step?.suffix === '\\n' ? 'selected' : ''}>\\n</option>
+        <option value="\\r\\n" ${step?.suffix === '\\r\\n' ? 'selected' : ''}>\\r\\n</option>
+      </select>
+      <input class="ms-delay" type="number" placeholder="Delay ms" style="width:80px" value="${step?.delay || step?.delayMs || 500}" />
+    </div>
+  `;
+  $("macroSteps").appendChild(div);
+};
+
+function collectMacroSteps() {
+  const steps = [];
+  $("macroSteps").querySelectorAll(".card").forEach(div => {
+    steps.push({
+      type: div.querySelector(".ms-type").value,
+      target: div.querySelector(".ms-target").value,
+      port: parseInt(div.querySelector(".ms-port").value) || 0,
+      payload: div.querySelector(".ms-payload").value,
+      suffix: div.querySelector(".ms-suffix").value,
+      delay: parseInt(div.querySelector(".ms-delay").value) || 500,
+      mode: "ascii"
+    });
+  });
+  return steps;
+}
+
+async function saveMacro() {
+  const name = $("macroName").value.trim();
+  if (!name) return alert("Name required");
+  const macro = {
+    id: $("macroEditId").value || undefined,
+    name,
+    icon: $("macroIcon").value || "▶",
+    steps: collectMacroSteps()
+  };
+  try {
+    await apiPost("/api/macros/save", macro);
+    $("macroEditor").style.display = "none";
+    loadMacros();
+    loadDashboard();
+  } catch (e) { alert("Error: " + e.message); }
+}
+
+async function editMacro(id) {
+  try {
+    const macro = await apiGet("/api/macros/get?id=" + id);
+    openMacroEditor(macro);
+  } catch (e) { alert("Error: " + e.message); }
+}
+
+window.runMacro = async (id) => {
+  try {
+    const res = await apiPost("/api/macros/run", { id });
+    alert(res.msg || "Running...");
+  } catch (e) { alert("Error: " + e.message); }
+};
+
+window.deleteMacro = async (id) => {
+  if (!confirm("Delete this macro?")) return;
+  try {
+    await apiPost("/api/macros/delete", { id });
+    loadMacros();
+    loadDashboard();
+  } catch (e) { alert("Error: " + e.message); }
+};
+
+// ── Template Functions ──
+let templateData = [];
+
+async function loadTemplates() {
+  try {
+    const res = await apiGet("/api/templates");
+    templateData = res.templates || [];
+    const el = $("templateList");
+    if (!el) return;
+    if (templateData.length === 0) {
+      el.innerHTML = '<div class="sub">No templates configured.</div>';
+      return;
+    }
+    el.innerHTML = templateData.map((t, i) => `
+      <div class="item" style="cursor:pointer; display:flex; align-items:center; gap:10px" onclick="showTemplate(${i})">
+        <span style="font-size:20px">📋</span>
+        <div style="flex:1">
+          <b>${esc(t.name)}</b>
+          <div class="small muted">Port ${t.defaultPort} | Suffix: ${t.defaultSuffix || '(none)'} | ${(t.defaultCommands || []).length} command(s)</div>
+        </div>
+      </div>
+    `).join('');
+  } catch (e) { console.error("loadTemplates", e); }
+}
+
+window.showTemplate = (idx) => {
+  const t = templateData[idx];
+  if (!t) return;
+  $("templateDetail").style.display = "block";
+  $("templateDetailName").textContent = t.name;
+  $("templateDetailInfo").innerHTML = `
+    Kind: <b>${t.kind || '?'}</b> | Port: <b>${t.defaultPort}</b> | Suffix: <b>${t.defaultSuffix || '(none)'}</b>
+  `;
+  const cmds = t.defaultCommands || [];
+  if (cmds.length === 0) {
+    $("templateCommands").innerHTML = '<div class="sub">No commands defined.</div>';
+    return;
+  }
+  $("templateCommands").innerHTML = cmds.map(c => `
+    <div class="item" style="display:flex; align-items:center; gap:10px">
+      <div style="flex:1">
+        <b>${esc(c.name)}</b>
+        <div class="mono small">${esc(c.payload)} ${c.suffix ? '+ ' + c.suffix : ''} (${c.payloadType || 'ascii'})</div>
+      </div>
+      <button class="btn tiny" onclick="useTemplateCmd('${esc(c.payload)}', '${esc(c.suffix || '')}', '${esc(c.payloadType || 'ascii')}')">Use in Terminal</button>
+    </div>
+  `).join('');
+};
+
+window.useTemplateCmd = (payload, suffix, mode) => {
+  $("termSend").value = payload;
+  if ($("termSuffix")) $("termSuffix").value = suffix;
+  if ($("termMode")) $("termMode").value = mode;
+  document.querySelector('[data-target="tab-terminal"]').click();
+};

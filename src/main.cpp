@@ -2,6 +2,7 @@
 #include "AppConfig.h"
 #include "CaptureProxy.h"
 #include "ConfigManager.h"
+#include "MacroHandler.h"
 #include "OTAHandler.h"
 #include "PortScanner.h"
 #include "RS232Handler.h"
@@ -13,6 +14,7 @@
 #include <ArduinoOTA.h>
 #include <ESPmDNS.h>
 #include <LittleFS.h>
+
 
 // Defined in WebAPI.cpp
 extern void mdnsScanLoop();
@@ -62,6 +64,7 @@ void setup() {
 
   portScanner.begin();
   ssdpScanner.begin();
+  macroHandler.begin();
 
   otaHandler.setManifestUrl(OTA_UPDATE_URL);
   otaHandler.begin();
@@ -80,6 +83,7 @@ void loop() {
   portScanner.loop();
   ssdpScanner.loop();
   mdnsScanLoop();
+  macroHandler.loop();
   otaHandler.loop();
 
   // WebSocket Cleanup

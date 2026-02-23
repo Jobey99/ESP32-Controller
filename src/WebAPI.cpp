@@ -9,10 +9,12 @@
 #include "AVDiscovery.h"
 #include "CaptureProxy.h"
 #include "ConfigManager.h"
+#include "MacroHandler.h"
 #include "OTAHandler.h"
 #include "PortScanner.h"
 #include "RS232Handler.h"
 #include "SSDPScanner.h"
+
 
 // mDNS scan state (flag-based, runs from main loop)
 static volatile bool mdnsScanPending = false;
@@ -850,6 +852,110 @@ void setupRoutes() {
     // We might want to give it a moment or rely on the loop checking the flag
     req->send(200, "application/json", "{\"ok\":true}");
   });
+  // ── Macro API ──
+  server.on("/api/macros", HTTP_GET, [](AsyncWebServerRequest *req) {
+    req->send(200, "application/json", macroHandler.listJson());
+  });
+
+  server.on("/api/macros/get", HTTP_GET, [](AsyncWebServerRequest *req) {
+    String id = req->hasParam("id") ? req->getParam("id")->value() : "";
+    String json = macroHandler.getById(id);
+    req->send(200, "application/json", json);
+  });
+
+  server.on(
+      "/api/macros/save", HTTP_POST, [](AsyncWebServerRequest *req) {}, nullptr,
+      [](AsyncWebServerRequest *req, uint8_t *data, size_t len, size_t,
+         size_t) {
+        String body = String((const char *)data).substring(0, len);
+        if (macroHandler.save(body))
+          req->send(200, "application/json", "{\"ok\":true}");
+        else
+          req->send(400, "application/json", "{\"error\":\"bad json\"}");
+      });
+
+  server.on(
+      "/api/macros/delete", HTTP_POST, [](AsyncWebServerRequest *req) {},
+      nullptr,
+      [](AsyncWebServerRequest *req, uint8_t *data, size_t len, size_t,
+         size_t) {
+        JsonDocument doc;
+        if (deserializeJson(doc, data, len))
+          return req->send(400);
+        String id = doc["id"] | "";
+        if (macroHandler.remove(id))
+          req->send(200, "application/json", "{\"ok\":true}");
+        else
+          req->send(404, "application/json", "{\"error\":\"not found\"}");
+      });
+
+  server.on(
+      "/api/macros/run", HTTP_POST, [](AsyncWebServerRequest *req) {}, nullptr,
+      [](AsyncWebServerRequest *req, uint8_t *data, size_t len, size_t,
+         size_t) {
+        JsonDocument doc;
+        if (deserializeJson(doc, data, len))
+          return req->send(400);
+        String id = doc["id"] | "";
+        if (macroHandler.execute(id))
+          req->send(200, "application/json",
+                    "{\"ok\":true,\"msg\":\"Running. See logs.\"}");
+        else
+          req->send(409, "application/json",
+                    "{\"error\":\"Macro already running\"}");
+      });
+
+  // ── Dashboard aggregate endpoint ──
+  server.on("/api/dashboard", HTTP_GET, [](AsyncWebServerRequest *req) {
+    JsonDocument doc;
+    doc["fw"] = FW_VERSION;
+    doc["uptime_s"] = (millis() - bootMs) / 1000;
+    doc["heap_free"] = ESP.getFreeHeap();
+    doc["wifi_connected"] = (WiFi.status() == WL_CONNECTED);
+    doc["wifi_rssi"] = (WiFi.status() == WL_CONNECTED) ? WiFi.RSSI() : 0;
+    doc["wifi_ip"] = WiFi.localIP().toString();
+    doc["ap_ip"] = WiFi.softAPIP().toString();
+    doc["term_connected"] = termConnected;
+    doc["proxy_running"] = proxyRunning;
+    doc["learn_enabled"] = learnEnabled;
+    doc["rs232_telnet"] = rs232TelnetConnected;
+    doc["macros_count"] = 0; // placeholder — count from macroHandler
+
+    // Device statuses
+    JsonArray devArr = doc["devices"].to<JsonArray>();
+    for (auto &s : devStatuses) {
+      JsonObject o = devArr.add<JsonObject>();
+      o["id"] = s.id;
+      o["online"] = s.online;
+      o["ip"] = s.lastIp;
+      o["port"] = s.lastPort;
+    }
+
+    String out;
+    serializeJson(doc, out);
+    req->send(200, "application/json", out);
+  });
+
+  // ── Templates endpoint ──
+  server.on("/api/templates", HTTP_GET, [](AsyncWebServerRequest *req) {
+    // Return templates from config
+    JsonDocument cfgDoc;
+    if (deserializeJson(cfgDoc, cfgJson)) {
+      req->send(500, "application/json", "{\"error\":\"cfg parse\"}");
+      return;
+    }
+    JsonDocument out;
+    JsonArray arr = out["templates"].to<JsonArray>();
+    if (cfgDoc["templates"].is<JsonArray>()) {
+      for (JsonObject t : cfgDoc["templates"].as<JsonArray>()) {
+        arr.add(t);
+      }
+    }
+    String s;
+    serializeJson(out, s);
+    req->send(200, "application/json", s);
+  });
+
   server.serveStatic("/", LittleFS, "/").setDefaultFile("index.html");
   server.serveStatic("/rs232_pro.html", LittleFS, "/rs232_pro.html");
 }

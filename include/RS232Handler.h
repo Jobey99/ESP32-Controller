@@ -3,10 +3,10 @@
 #include <ESPAsyncWebServer.h>
 #include <WiFi.h>
 
-
 // Global WebSocket for RS232
 extern AsyncWebSocket wsRS232;
 extern WiFiServer rs232TelnetServer;
+extern bool rs232TelnetConnected;
 
 // Initialize Serial2 and WebSocket handlers
 void rs232Setup();

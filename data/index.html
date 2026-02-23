@@ -60,13 +60,16 @@
 
       <div class="nav-section">
         <div class="nav-label">Control</div>
-        <a class="nav-item active" data-target="tab-devices">Saved Devices</a>
+        <a class="nav-item active" data-target="tab-dashboard">Dashboard</a>
+        <a class="nav-item" data-target="tab-devices">Saved Devices</a>
+        <a class="nav-item" data-target="tab-macros">Macros</a>
         <a class="nav-item" data-target="tab-rs232">RS232 Serial</a>
         <a class="nav-item" data-target="tab-terminal">TCP Client</a>
         <a class="nav-item" data-target="tab-tcpserver">TCP Server</a>
         <a class="nav-item" data-target="tab-udp">UDP Tool</a>
         <a class="nav-item" data-target="tab-pjlink">PJLink</a>
         <a class="nav-item" data-target="tab-learn">Learner</a>
+        <a class="nav-item" data-target="tab-templates">Templates</a>
       </div>
 
       <div class="nav-section">
@@ -94,7 +97,7 @@
       <!-- Top Status Banner (Visible on all pages) -->
       <div class="page-header">
         <div>
-          <h1 id="pageTitle">Saved Devices</h1>
+          <h1 id="pageTitle">Dashboard</h1>
           <div id="healthLine" class="sub">Loading status...</div>
         </div>
         <button id="btnHelp" class="btn">Help ?</button>
@@ -102,8 +105,49 @@
 
       <!-- ================= CONTROL SECTION ================= -->
 
+      <!-- Dashboard Tab -->
+      <section id="tab-dashboard" class="panel show">
+        <div class="grid2">
+          <!-- System Card -->
+          <div class="card">
+            <h2>📡 System Status</h2>
+            <div id="dashSystem" class="mono small" style="line-height:1.8">
+              Loading...
+            </div>
+          </div>
+          <!-- Quick Actions Card -->
+          <div class="card">
+            <h2>⚡ Quick Actions</h2>
+            <div class="row" style="flex-wrap:wrap; gap:8px">
+              <button class="btn grow"
+                onclick="document.querySelector('[data-target=\'tab-rs232\']').click()">RS232</button>
+              <button class="btn grow" onclick="document.querySelector('[data-target=\'tab-terminal\']').click()">TCP
+                Terminal</button>
+              <button class="btn grow"
+                onclick="document.querySelector('[data-target=\'tab-discovery\']').click()">Scanner</button>
+              <button class="btn grow"
+                onclick="document.querySelector('[data-target=\'tab-macros\']').click()">Macros</button>
+            </div>
+            <h3 style="margin-top:15px">Quick Macros</h3>
+            <div id="dashMacros" class="row" style="flex-wrap:wrap; gap:8px">
+              <span class="sub">No macros yet</span>
+            </div>
+          </div>
+        </div>
+        <!-- Device Status Cards -->
+        <div class="card" style="margin-top:15px">
+          <div class="row between">
+            <h2>🔌 Devices</h2>
+            <button class="btn tiny" onclick="loadDashboard()">Refresh</button>
+          </div>
+          <div id="dashDevices" class="list">
+            <span class="sub">No saved devices</span>
+          </div>
+        </div>
+      </section>
+
       <!-- Devices Tab -->
-      <section id="tab-devices" class="panel show">
+      <section id="tab-devices" class="panel">
         <div class="card">
           <div class="row between">
             <h2>My Devices</h2>
@@ -682,6 +726,65 @@
           </div>
         </div>
         <div id="otaOut" class="mono box" style="margin-top:10px">(OTA Status)</div>
+      </section>
+
+      <!-- Macros Tab -->
+      <section id="tab-macros" class="panel">
+        <div class="card">
+          <div class="row between">
+            <h2>Macros</h2>
+            <button id="btnNewMacro" class="btn primary">+ New Macro</button>
+          </div>
+          <div class="sub">Save command sequences and replay them with one click.</div>
+          <div id="macroList" class="list" style="margin-top:15px"></div>
+        </div>
+
+        <!-- Macro Editor (hidden by default) -->
+        <div id="macroEditor" class="card" style="margin-top:15px; display:none">
+          <div class="row between">
+            <h2 id="macroEditorTitle">New Macro</h2>
+            <button class="btn tiny" onclick="$('macroEditor').style.display='none'">✕</button>
+          </div>
+          <div class="row">
+            <input id="macroName" class="grow" placeholder="Macro Name (e.g. Morning Startup)" />
+            <input id="macroIcon" style="width:50px" placeholder="▶" value="▶" />
+          </div>
+          <input id="macroEditId" type="hidden" />
+
+          <h3 style="margin-top:15px">Steps</h3>
+          <div id="macroSteps"></div>
+
+          <div class="row" style="margin-top:10px">
+            <button class="btn" onclick="addMacroStep()">+ Add Step</button>
+          </div>
+
+          <div class="row" style="margin-top:15px">
+            <button id="btnSaveMacro" class="btn primary grow">Save Macro</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Templates Tab -->
+      <section id="tab-templates" class="panel">
+        <div class="card">
+          <div class="row between">
+            <h2>Command Templates</h2>
+            <button class="btn tiny" onclick="loadTemplates()">Refresh</button>
+          </div>
+          <div class="sub">Pre-built command sets for common AV devices. Click a template to see its commands, then use
+            them in the TCP terminal or RS232 page.</div>
+          <div id="templateList" class="list" style="margin-top:15px"></div>
+        </div>
+
+        <!-- Template Detail (shown on click) -->
+        <div id="templateDetail" class="card" style="margin-top:15px; display:none">
+          <div class="row between">
+            <h2 id="templateDetailName">Template</h2>
+            <button class="btn tiny" onclick="$('templateDetail').style.display='none'">✕</button>
+          </div>
+          <div class="mono small" id="templateDetailInfo"></div>
+          <div id="templateCommands" class="list" style="margin-top:10px"></div>
+        </div>
       </section>
 
     </div> <!-- end main-content -->
