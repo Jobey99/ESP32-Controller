@@ -148,7 +148,7 @@ def start_mdns_services(local_ip: str):
         print("[mDNS] Skipped (zeroconf not installed)")
         return None, []
 
-    zc = Zeroconf()
+    zc = Zeroconf(interfaces=[local_ip])
     services = []
     ip_bytes = socket.inet_aton(local_ip)
 
@@ -176,6 +176,24 @@ def start_mdns_services(local_ip: str):
             "name": "Fake Extron Switcher._telnet._tcp.local.",
             "port": 23,
             "properties": {"model": "FakeSW-4HD", "protocol": "SIS"},
+        },
+        {
+            "type": "_dante._udp.local.",
+            "name": "Fake Dante DSP._dante._udp.local.",
+            "port": 8700,
+            "properties": {"model": "Fake-DSP-Matrix", "manufacturer": "Audinate"},
+        },
+        {
+            "type": "_netaudio-arc._udp.local.",
+            "name": "Fake Dante Amp._netaudio-arc._udp.local.",
+            "port": 8702,
+            "properties": {"model": "Fake-Amp-4CH"},
+        },
+        {
+            "type": "_ssc._tcp.local.",
+            "name": "Sennheiser TCCM2._ssc._tcp.local.",
+            "port": 45,
+            "properties": {"model": "TCCM2", "manufacturer": "Sennheiser"},
         },
     ]
 

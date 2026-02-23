@@ -15,47 +15,96 @@
 #include "RS232Handler.h"
 #include "SSDPScanner.h"
 
+// mDNS scan state
+#include <Arduino.h>
+#include <ArduinoJson.h>
+#include <IPAddress.h>
+#include <mdns.h>
 
-// mDNS scan state (flag-based, runs from main loop)
 static volatile bool mdnsScanPending = false;
 static volatile bool mdnsScanning = false;
 static String mdnsPendingService = "";
 static String mdnsPendingProto = "";
 static String mdnsResultsJson = "{\"running\":false,\"results\":[]}";
+static mdns_search_once_t *mdnsSearch = nullptr;
+static uint32_t mdnsScanStartTime = 0;
 
-// Called from loop() in main.cpp — safe to use MDNS library here
 void mdnsScanLoop() {
-  if (!mdnsScanPending)
+  if (mdnsScanPending && !mdnsScanning) {
+    mdnsScanPending = false;
+    mdnsScanning = true;
+
+    String service = mdnsPendingService;
+    String proto = mdnsPendingProto;
+
+    // Strip leading underscore for ESP-IDF mdns_query_async_new
+    if (service.startsWith("_"))
+      service.remove(0, 1);
+    if (proto.startsWith("_"))
+      proto.remove(0, 1);
+
+    char srv[64];
+    char prt[32];
+    snprintf(srv, sizeof(srv), "_%s", service.c_str());
+    snprintf(prt, sizeof(prt), "_%s", proto.c_str());
+
+    Serial.printf(
+        "mDNS: Starting async query for service=%s proto=%s (4500ms)\n", srv,
+        prt);
+
+    // Start an async query for 4500ms
+    mdnsSearch =
+        mdns_query_async_new(NULL, srv, prt, MDNS_TYPE_PTR, 4500, 20, NULL);
+    mdnsScanStartTime = millis();
+
+    // Update JSON to indicate running
+    mdnsResultsJson = "{\"running\":true,\"results\":[]}";
     return;
-  mdnsScanPending = false;
-  mdnsScanning = true;
-
-  String service = mdnsPendingService;
-  String proto = mdnsPendingProto;
-
-  // Strip leading underscore — MDNS.queryService expects bare name
-  if (service.startsWith("_"))
-    service.remove(0, 1);
-  if (proto.startsWith("_"))
-    proto.remove(0, 1);
-
-  Serial.printf("mDNS: Querying service=%s proto=%s\n", service.c_str(),
-                proto.c_str());
-  int n = MDNS.queryService(service.c_str(), proto.c_str());
-  Serial.printf("mDNS: Found %d services\n", n);
-
-  JsonDocument res;
-  res["running"] = false;
-  res["count"] = n;
-  JsonArray arr = res["results"].to<JsonArray>();
-  for (int i = 0; i < n; ++i) {
-    JsonObject o = arr.add<JsonObject>();
-    o["hostname"] = MDNS.hostname(i);
-    o["ip"] = MDNS.IP(i).toString();
-    o["port"] = MDNS.port(i);
   }
-  serializeJson(res, mdnsResultsJson);
-  mdnsScanning = false;
+
+  if (mdnsScanning && mdnsSearch) {
+    mdns_result_t *results = nullptr;
+    // Check if the query has finished (or if 5000ms safety timeout hit)
+    if (mdns_query_async_get_results(mdnsSearch, 0, &results) ||
+        (millis() - mdnsScanStartTime > 5000)) {
+      mdns_query_async_delete(mdnsSearch);
+      mdnsSearch = nullptr;
+
+      int count = 0;
+      JsonDocument res;
+      res["running"] = false;
+      JsonArray arr = res["results"].to<JsonArray>();
+
+      mdns_result_t *r = results;
+      while (r) {
+        count++;
+        JsonObject o = arr.add<JsonObject>();
+        if (r->hostname)
+          o["hostname"] = String(r->hostname);
+        o["port"] = r->port;
+
+        // Extract IP
+        if (r->addr) {
+          if (r->addr->addr.type == ESP_IPADDR_TYPE_V4) {
+            o["ip"] = IPAddress(r->addr->addr.u_addr.ip4.addr).toString();
+          } else if (r->addr->addr.type == ESP_IPADDR_TYPE_V6) {
+            o["ip"] = "IPv6"; // Ignore IPv6 for now
+          }
+        } else {
+          o["ip"] = "Unknown";
+        }
+        r = r->next;
+      }
+
+      res["count"] = count;
+      serializeJson(res, mdnsResultsJson);
+      if (results)
+        mdns_query_results_free(results);
+
+      Serial.printf("mDNS: Async scan complete. Found %d services.\n", count);
+      mdnsScanning = false;
+    }
+  }
 }
 #include "TcpServerHandler.h" // Added
 #include "TerminalHandler.h"
